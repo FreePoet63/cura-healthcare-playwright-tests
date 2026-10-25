@@ -1,0 +1,224 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'   # nightly, 02:00 UTC
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: Browser to run
+        type: choice
+        options: [all, chromium, firefox, webkit]
+        default: all
+      test_filter:
+        description: 'Surefire -Dtest filter, e.g. LoginTest or LoginTest#logout*'
+        required: false
+        default: ''
+      reruns:
+        description: 'Reruns of failed tests (2 reruns = 3 attempts in total)'
+        required: false
+        default: '2'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  checks: write
+
+env:
+  ALLURE_VERSION: 2.29.0
+  JAVA_VERSION: '17'
+
+jobs:
+  prepare:
+    name: Prepare matrix
+    runs-on: ubuntu-latest
+    outputs:
+      browsers: ${{ steps.set.outputs.browsers }}
+    steps:
+      - id: set
+        env:
+          EVENT: ${{ github.event_name }}
+          BROWSER_INPUT: ${{ inputs.browser }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            echo 'browsers=["chromium"]' >> "$GITHUB_OUTPUT"
+          elif [ -z "$BROWSER_INPUT" ] || [ "$BROWSER_INPUT" = "all" ]; then
+            echo 'browsers=["chromium","firefox","webkit"]' >> "$GITHUB_OUTPUT"
+          else
+            echo "browsers=[\"$BROWSER_INPUT\"]" >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    name: Tests (${{ matrix.browser }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: ${{ fromJSON(needs.prepare.outputs.browsers) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ matrix.browser }}-${{ hashFiles('pom.xml') }}
+
+      - name: Install Playwright browser and system dependencies
+        run: >
+          mvn -B exec:java -e
+          -D exec.mainClass=com.microsoft.playwright.CLI
+          -D exec.args="install --with-deps ${{ matrix.browser }}"
+
+      - name: Run tests (failed tests are rerun)
+        env:
+          TEST_FILTER: ${{ inputs.test_filter }}
+          RERUNS: ${{ inputs.reruns || '2' }}
+        run: |
+          args=(-B clean test
+                "-Dbrowser=${{ matrix.browser }}"
+                "-Dheadless=true"
+                "-Dsurefire.rerunFailingTestsCount=${RERUNS}")
+          if [ -n "$TEST_FILTER" ]; then
+            args+=("-Dtest=${TEST_FILTER}")
+          fi
+          mvn "${args[@]}"
+
+      - name: Publish JUnit report
+        if: always()
+        continue-on-error: true
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: target/surefire-reports/TEST-*.xml
+          check_name: JUnit (${{ matrix.browser }})
+          detailed_summary: true
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-${{ matrix.browser }}
+          path: target/allure-results
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload Playwright traces (failed attempts)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: traces-${{ matrix.browser }}
+          path: target/traces
+          if-no-files-found: ignore
+          retention-days: 7
+
+  report:
+    name: Allure report and Pages
+    needs: [prepare, test]
+    if: always() && needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write   # push to gh-pages
+    env:
+      REPORT_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Download Allure results from all browsers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: allure-results-*
+          merge-multiple: true
+          path: allure-results
+
+      - name: Checkout gh-pages (to take the previous history)
+        uses: actions/checkout@v4
+        continue-on-error: true   # the branch does not exist on the first run
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Restore Allure history
+        run: |
+          if [ -d gh-pages/history ]; then
+            cp -r gh-pages/history allure-results/history
+            echo "History restored"
+          else
+            echo "No previous history (first run)"
+          fi
+
+      - name: Add environment and executor info
+        run: |
+          {
+            echo "Browsers=chromium, firefox, webkit"
+            echo "Java=${JAVA_VERSION}"
+            echo "Base.URL=https://katalon-demo-cura.herokuapp.com"
+            echo "Branch=${GITHUB_REF_NAME}"
+            echo "Commit=${GITHUB_SHA::7}"
+          } > allure-results/environment.properties
+
+          cat > allure-results/executor.json <<EOF
+          {
+            "name": "GitHub Actions",
+            "type": "github",
+            "buildOrder": ${{ github.run_number }},
+            "buildName": "Run #${{ github.run_number }}",
+            "buildUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "reportName": "Allure Report",
+            "reportUrl": "${REPORT_URL}"
+          }
+          EOF
+
+      - name: Install Allure CLI
+        run: |
+          curl -sSLo allure.zip "https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"
+          unzip -q allure.zip -d "$HOME"
+          echo "$HOME/allure-${ALLURE_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Generate Allure report
+        run: allure generate allure-results --clean -o allure-report
+
+      - name: Job summary
+        run: |
+          S=allure-report/widgets/summary.json
+          {
+            echo "## Allure report"
+            echo "| Passed | Failed | Broken | Skipped | Total |"
+            echo "|---|---|---|---|---|"
+            jq -r '.statistic | "| \(.passed) | \(.failed) | \(.broken) | \(.skipped) | \(.total) |"' "$S"
+            echo
+            echo "[Open report](${REPORT_URL})"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report
+          retention-days: 14
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report
+          force_orphan: true
