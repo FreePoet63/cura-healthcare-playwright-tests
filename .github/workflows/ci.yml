@@ -65,7 +65,7 @@ jobs:
       matrix:
         browser: ${{ fromJSON(needs.prepare.outputs.browsers) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v4
         with:
@@ -150,7 +150,7 @@ jobs:
           path: allure-results
 
       - name: Checkout gh-pages (to take the previous history)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         continue-on-error: true   # the branch does not exist on the first run
         with:
           ref: gh-pages
