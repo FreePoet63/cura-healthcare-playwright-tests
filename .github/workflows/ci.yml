@@ -102,7 +102,7 @@ jobs:
       - name: Publish JUnit report
         if: always()
         continue-on-error: true
-        uses: mikepenz/action-junit-report@v5
+        uses: mikepenz/action-junit-report@v6
         with:
           report_paths: target/surefire-reports/TEST-*.xml
           check_name: JUnit (${{ matrix.browser }})
