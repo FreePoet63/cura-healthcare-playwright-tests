@@ -1,5 +1,6 @@
 package com.cura.components;
 
+import com.cura.pages.HistoryPage;
 import com.cura.pages.HomePage;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
@@ -24,6 +25,13 @@ public class SideMenu {
         }
         openedSidebar.waitFor();
         return this;
+    }
+
+    @Step("Open 'History' via side menu")
+    public HistoryPage openHistory() {
+        open();
+        page.getByRole(AriaRole.LINK, new Page.GetByRoleOptions().setName("History").setExact(true)).click();
+        return new HistoryPage(page);
     }
 
     @Step("Log out via side menu")

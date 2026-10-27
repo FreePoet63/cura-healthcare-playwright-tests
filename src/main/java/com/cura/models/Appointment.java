@@ -32,4 +32,8 @@ public record Appointment (
     public Appointment withProgram(HealthcareProgram newProgram) {
         return new Appointment(facility, hospitalReadmission, newProgram, visitDate, comment);
     }
+
+    public Appointment withComment(String newComment) {
+        return new Appointment(facility, hospitalReadmission, program, visitDate, newComment);
+    }
 }

@@ -1,5 +1,6 @@
 package com.cura.pages;
 
+import com.cura.components.SideMenu;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import io.qameta.allure.Step;
@@ -13,8 +14,11 @@ public class ConfirmationPage extends BasePage {
     private final Locator comment = page.locator("#comment");
     private final Locator goToHomepageButton = page.locator(".btn.btn-default");
 
+    private final SideMenu sideMenu;
+
     public ConfirmationPage(Page page) {
         super(page);
+        this.sideMenu = new SideMenu(page);
     }
 
     @Step("Click 'Go to Homepage'")
@@ -45,5 +49,9 @@ public class ConfirmationPage extends BasePage {
 
     public Locator comment() {
         return comment;
+    }
+
+    public SideMenu sideMenu() {
+        return sideMenu;
     }
 }

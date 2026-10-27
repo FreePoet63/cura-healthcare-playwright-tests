@@ -1,6 +1,7 @@
 package com.cura.pages;
 
 import com.cura.components.SideMenu;
+import com.cura.config.TestConfig;
 import com.cura.models.Appointment;
 import com.cura.models.Facility;
 import com.cura.models.HealthcareProgram;
@@ -63,6 +64,13 @@ public class AppointmentPage extends BasePage {
     @Step("Click 'Book Appointment' without a visit date")
     public AppointmentPage bookExpectingValidationError() {
         bookButton.click();
+        return this;
+    }
+
+    @Step("Open appointment form")
+    public AppointmentPage open() {
+        page.navigate(TestConfig.baseUrl() + "/#appointment");
+        heading.waitFor();;
         return this;
     }
 
