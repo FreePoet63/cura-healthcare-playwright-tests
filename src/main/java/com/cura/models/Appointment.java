@@ -16,6 +16,10 @@ public record Appointment (
         return LocalDate.now().plusDays(daysAhead).format(DATE_FORMAT);
     }
 
+    public static String postDate(int daysAgo) {
+        return futureDate(-daysAgo);
+    }
+
     public static Appointment full() {
         return new Appointment(
                 Facility.SEOUL,
