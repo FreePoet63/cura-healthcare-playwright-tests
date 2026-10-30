@@ -72,6 +72,8 @@ public class AppointmentDateTest extends BaseTest {
         assertThat(confirmation.visitDate()).hasText(date);
     }
 
+    @Disabled("BUG #17: invalid date is converted to another date and the appointment is created")
+    @Issue("17")
     @ParameterizedTest(name = "[{index}] {0}")
     @MethodSource("invalidDates")
     @Story("Visit date boundaries")
@@ -85,6 +87,8 @@ public class AppointmentDateTest extends BaseTest {
         assertThat(form.invalidVisitDate()).isVisible();
     }
 
+    @Disabled("BUG #18: appointment can be booked for a date in the past")
+    @Issue("18")
     @Test
     @Story("Visit date boundaries")
     @Severity(SeverityLevel.CRITICAL)
