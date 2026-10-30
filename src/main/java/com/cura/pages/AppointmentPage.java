@@ -50,7 +50,7 @@ public class AppointmentPage extends BasePage {
     }
 
     @Step("Enter comment: {comment}")
-    public AppointmentPage enterCommit(String comment) {
+    public AppointmentPage enterComment(String comment) {
         commentInput.fill(comment);
         return this;
     }
@@ -58,6 +58,7 @@ public class AppointmentPage extends BasePage {
     @Step("Click 'Book Appointment'")
     public ConfirmationPage book() {
         bookButton.click();
+        page.waitForLoadState();
         return new ConfirmationPage(page);
     }
 
@@ -80,12 +81,36 @@ public class AppointmentPage extends BasePage {
         setHospitalReadmission(appointment.hospitalReadmission());
         selectProgram(appointment.program());
         enterVisitDate(appointment.visitDate());
-        enterCommit(appointment.comment());
+        enterComment(appointment.comment());
         return book();
     }
 
     public Locator heading() {
         return heading;
+    }
+
+    public Locator facilitySelect() {
+        return facilitySelect;
+    }
+
+    public Locator facilityOptions() {
+        return facilitySelect.locator("option");
+    }
+
+    public Locator readmissionCheckbox() {
+        return readmissionCheckbox;
+    }
+
+    public Locator programRadio(HealthcareProgram program) {
+        return page.locator(program.selector());
+    }
+
+    public Locator visitDateInput() {
+        return visitDateInput;
+    }
+
+    public Locator commentInput() {
+        return commentInput;
     }
 
     public Locator invalidVisitDate() {
